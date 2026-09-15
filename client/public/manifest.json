@@ -1,0 +1,12 @@
+{
+  "name": "PURE ERP",
+  "short_name": "PURE",
+  "description": "نظام إدارة مصنع بيور للمواد الغذائية",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f8f5",
+  "theme_color": "#213d38",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": []
+}

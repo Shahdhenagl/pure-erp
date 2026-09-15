@@ -1,33 +1,298 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { Streamdown } from 'streamdown';
+import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowDownLeft,
+  ArrowLeft,
+  ArrowRightLeft,
+  ArrowUpRight,
+  BarChart3,
+  Bell,
+  Boxes,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ClipboardList,
+  Clock3,
+  Factory,
+  FileCheck2,
+  Fingerprint,
+  LayoutDashboard,
+  MapPinned,
+  Menu,
+  MoreHorizontal,
+  Package,
+  Plus,
+  ReceiptText,
+  Search,
+  Send,
+  Settings2,
+  ShieldCheck,
+  ShoppingBag,
+  Smartphone,
+  Store,
+  Truck,
+  UserCog,
+  UsersRound,
+  Warehouse,
+  X,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
+type PageKey =
+  | "dashboard"
+  | "orders"
+  | "inventory"
+  | "production"
+  | "partners"
+  | "invoices"
+  | "team"
+  | "settings";
+type AppMode = "admin" | "store";
+
+type Order = {
+  id: string;
+  trader: string;
+  area: string;
+  channel: string;
+  items: string;
+  total: string;
+  status: "معلق" | "قيد التجهيز" | "تم التسليم";
+  time: string;
+  color: string;
+};
+
+const navItems: { key: PageKey; label: string; icon: typeof LayoutDashboard; badge?: string }[] = [
+  { key: "dashboard", label: "نظرة عامة", icon: LayoutDashboard },
+  { key: "orders", label: "الطلبات", icon: ClipboardList, badge: "12" },
+  { key: "inventory", label: "المخزون والمخازن", icon: Warehouse },
+  { key: "production", label: "التصنيع والوصفات", icon: Factory },
+  { key: "partners", label: "التجار والعملاء", icon: UsersRound },
+  { key: "invoices", label: "الفواتير", icon: ReceiptText, badge: "4" },
+  { key: "team", label: "الفريق والحضور", icon: Fingerprint },
+  { key: "settings", label: "الإعدادات والصلاحيات", icon: Settings2 },
+];
+
+const products = [
+  { name: "كريم كراميل 80 جم", sku: "PURE-CC-80", price: "13.00", stock: 87, color: "#b32631" },
+  { name: "جيلي فراولة 70 جم", sku: "PURE-JS-70", price: "9.00", stock: 142, color: "#df5548" },
+  { name: "جيلي مانجو 70 جم", sku: "PURE-JM-70", price: "9.00", stock: 56, color: "#f1aa3c" },
+  { name: "أرز بسمتي هندي 1121", sku: "PURE-RB-5", price: "85.00", stock: 19, color: "#665043" },
+  { name: "خلطة كريسبي حار 250 جم", sku: "PURE-CR-250", price: "13.00", stock: 64, color: "#8e2928" },
+];
+
+const seedOrders: Order[] = [
+  { id: "#ORD-24091", trader: "سوبر ماركت الإيمان", area: "مدينة نصر", channel: "مندوب", items: "8 أصناف / 42 وحدة", total: "4,820 ج.م", status: "معلق", time: "منذ 18 دقيقة", color: "#f0a33b" },
+  { id: "#ORD-24090", trader: "ماركت أولاد رجب", area: "المعادي", channel: "المتجر", items: "5 أصناف / 28 وحدة", total: "2,340 ج.م", status: "قيد التجهيز", time: "منذ 42 دقيقة", color: "#c96b2e" },
+  { id: "#ORD-24089", trader: "محمود عطية", area: "شبرا", channel: "مندوب", items: "12 صنف / 95 وحدة", total: "8,760 ج.م", status: "تم التسليم", time: "اليوم، 10:24 ص", color: "#3e9277" },
+  { id: "#ORD-24088", trader: "البركة للتجارة", area: "الهرم", channel: "المتجر", items: "3 أصناف / 16 وحدة", total: "1,120 ج.م", status: "تم التسليم", time: "اليوم، 09:48 ص", color: "#3e9277" },
+];
+
+const warehouses = [
+  { name: "المخزن الرئيسي", type: "خامات غذائية", code: "WH-01", value: "182,450", tone: "sage", stock: "92%" },
+  { name: "مخزن الباكدجنج", type: "مواد تعبئة وتغليف", code: "WH-02", value: "76,820", tone: "peach", stock: "78%" },
+  { name: "توزيع القاهرة", type: "سيارة توزيع • م. أحمد", code: "VAN-03", value: "48,300", tone: "blue", stock: "64%" },
+  { name: "توزيع الجيزة", type: "سيارة توزيع • م. كريم", code: "VAN-05", value: "31,980", tone: "cream", stock: "41%" },
+];
+
+const ingredients = [
+  { name: "سكر أبيض", qty: "38 كجم", level: 78, color: "#c8943d" },
+  { name: "نكهة فراولة", qty: "8.4 كجم", level: 34, color: "#d85b55" },
+  { name: "جيلاتين", qty: "12 كجم", level: 22, color: "#d26e41" },
+  { name: "علبة كريم كراميل", qty: "1,240 قطعة", level: 61, color: "#8f5e4b" },
+];
+
+const reps = [
+  { name: "أحمد حسن", role: "مندوب مبيعات", initials: "أح", today: "حاضر", time: "08:41 ص", orders: 18, color: "#386e66" },
+  { name: "كريم محمود", role: "مندوب مبيعات", initials: "ك", today: "حاضر", time: "08:56 ص", orders: 12, color: "#a65a3b" },
+  { name: "سارة علي", role: "مدير مبيعات", initials: "سع", today: "متأخر", time: "09:17 ص", orders: 9, color: "#9b7546" },
+  { name: "محمد السيد", role: "مندوب مبيعات", initials: "مس", today: "غائب", time: "—", orders: 0, color: "#7d8491" },
+];
+
+function BrandMark({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={`flex items-center gap-2 ${compact ? "justify-center" : ""}`} dir="ltr">
+      <div className="brand-mark">p</div>
+      {!compact && (
+        <div className="leading-none text-right" dir="rtl">
+          <div className="text-[21px] font-extrabold tracking-[-0.08em] text-[#243e3a]">pure</div>
+          <div className="mt-1 text-[8px] font-bold tracking-[0.18em] text-[#c06d46]">FOOD SYSTEM</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: Order["status"] }) {
+  const styles = {
+    معلق: "bg-[#fff3df] text-[#a8671e]",
+    "قيد التجهيز": "bg-[#e6f1ed] text-[#377669]",
+    "تم التسليم": "bg-[#edf2ed] text-[#5c735d]",
+  };
+  return <span className={`status-badge ${styles[status]}`}>{status}</span>;
+}
+
+function StatCard({ title, value, detail, icon: Icon, tone, trend }: { title: string; value: string; detail: string; icon: typeof Boxes; tone: string; trend?: string }) {
+  return (
+    <div className="stat-card">
+      <div className="flex items-start justify-between gap-3">
+        <div className={`stat-icon ${tone}`}><Icon size={19} strokeWidth={1.8} /></div>
+        {trend && <span className="trend-chip"><ArrowUpRight size={13} /> {trend}</span>}
+      </div>
+      <div className="mt-5 text-[27px] font-bold tracking-[-0.06em] text-[#213a36]">{value}</div>
+      <div className="mt-1 flex items-center justify-between gap-2"><span className="text-[13px] font-semibold text-[#56625f]">{title}</span><span className="text-[11px] text-[#98a19e]">{detail}</span></div>
+    </div>
+  );
+}
+
 export default function Home() {
-  // The useAuth hook provides authentication state.
-  // To implement login/logout, call logout(), or start login from an event
-  // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
-  // startLogin() during render (no href={startLogin()}) — it mints a one-time
-  // nonce cookie and must run only at the moment of navigation.
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
+  const [mode, setMode] = useState<AppMode>(() => window.location.pathname === "/store" ? "store" : "admin");
+  const [page, setPage] = useState<PageKey>("dashboard");
+  const [orders, setOrders] = useState(seedOrders);
+  const [role, setRole] = useState("المدير العام");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
+  const [warehouse, setWarehouse] = useState("كل المخازن");
+  const [search, setSearch] = useState("");
+  const [cart, setCart] = useState<string[]>([]);
 
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
+  const visibleOrders = useMemo(() => {
+    if (!search.trim()) return orders;
+    return orders.filter((order) => `${order.id} ${order.trader} ${order.area}`.includes(search.trim()));
+  }, [orders, search]);
+
+  const approveOrder = (id: string) => {
+    setOrders((current) => current.map((order) => order.id === id ? { ...order, status: "قيد التجهيز" } : order));
+    toast.success("تم اعتماد الطلب وإرساله للتجهيز");
+  };
+
+  const addStoreProduct = (name: string) => {
+    setCart((current) => [...current, name]);
+    toast.success(`تمت إضافة ${name} إلى السلة`);
+  };
+
+  const pageTitle = navItems.find((item) => item.key === page)?.label ?? "نظرة عامة";
+
+  if (mode === "store") {
+    return <Storefront cart={cart} onBack={() => setMode("admin")} onAdd={addStoreProduct} />;
+  }
+
+  const renderPage = () => {
+    switch (page) {
+      case "orders":
+        return <OrdersPage orders={visibleOrders} search={search} setSearch={setSearch} onApprove={approveOrder} />;
+      case "inventory":
+        return <InventoryPage warehouse={warehouse} setWarehouse={setWarehouse} />;
+      case "production":
+        return <ProductionPage />;
+      case "partners":
+        return <PartnersPage />;
+      case "invoices":
+        return <InvoicesPage />;
+      case "team":
+        return <TeamPage />;
+      case "settings":
+        return <SettingsPage />;
+      default:
+        return <DashboardPage orders={orders} onApprove={approveOrder} />;
+    }
+  };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
+    <div className="app-shell" dir="rtl">
+      <aside className={`app-sidebar ${showMobileNav ? "mobile-open" : ""}`}>
+        <div className="sidebar-top">
+          <div className="sidebar-brand"><BrandMark /><button className="mobile-close" onClick={() => setShowMobileNav(false)}><X size={18} /></button></div>
+          <div className="workspace-switch"><div className="workspace-dot" /><div className="min-w-0 flex-1"><div className="text-[11px] text-[#9eaaa5]">مساحة العمل</div><div className="mt-1 truncate text-[13px] font-bold text-white">مصنع بيور للمواد الغذائية</div></div><ChevronDown size={15} className="text-[#96aaa5]" /></div>
+        </div>
+        <div className="sidebar-scroll">
+          <div className="sidebar-label">الإدارة والتشغيل</div>
+          <nav className="space-y-1">
+            {navItems.slice(0, 6).map((item) => {
+              const Icon = item.icon;
+              return <button key={item.key} onClick={() => { setPage(item.key); setShowMobileNav(false); }} className={`nav-item ${page === item.key ? "active" : ""}`}><Icon size={18} strokeWidth={1.8} /><span>{item.label}</span>{item.badge && <span className="nav-badge">{item.badge}</span>}</button>;
+            })}
+          </nav>
+          <div className="sidebar-label mt-7">الإدارة</div>
+          <nav className="space-y-1">
+            {navItems.slice(6).map((item) => { const Icon = item.icon; return <button key={item.key} onClick={() => { setPage(item.key); setShowMobileNav(false); }} className={`nav-item ${page === item.key ? "active" : ""}`}><Icon size={18} strokeWidth={1.8} /><span>{item.label}</span></button>; })}
+          </nav>
+          <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.06] p-4">
+            <div className="flex items-center gap-2 text-[#f4c28d]"><ShieldCheck size={17} /><span className="text-xs font-bold">النسخة التجريبية</span></div>
+            <p className="mt-2 text-[11px] leading-5 text-[#a4b2ad]">كل الوحدات الأساسية جاهزة للمراجعة قبل ربط قاعدة البيانات الحقيقية.</p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[72%] rounded-full bg-[#d68558]" /></div>
+            <div className="mt-2 flex justify-between text-[10px] text-[#9eaaa5]"><span>جاهزية MVP</span><span>72%</span></div>
+          </div>
+        </div>
+        <div className="sidebar-bottom"><div className="flex items-center gap-3"><div className="avatar avatar-small">مع</div><div className="min-w-0 flex-1"><div className="truncate text-[12px] font-bold text-white">محمد عادل</div><div className="truncate text-[10px] text-[#8da39c]">{role}</div></div><MoreHorizontal size={17} className="text-[#8da39c]" /></div></div>
+      </aside>
+
+      <main className="main-area">
+        <header className="topbar">
+          <div className="flex items-center gap-3"><button className="mobile-menu" onClick={() => setShowMobileNav(true)}><Menu size={20} /></button><div><div className="flex items-center gap-2"><span className="eyebrow">الأربعاء، ١٦ سبتمبر ٢٠٢٦</span><span className="live-dot" /></div><h1 className="page-heading">{pageTitle}</h1></div></div>
+          <div className="topbar-actions">
+            <div className="mode-toggle"><button className={mode === "admin" ? "active" : ""} onClick={() => setMode("admin")}>لوحة الإدارة</button><button onClick={() => setMode("store")}>متجر التجار <Store size={14} /></button></div>
+            <button className="icon-button notification-button" onClick={() => setShowNotifications(!showNotifications)}><Bell size={19} /><span className="notification-dot" /></button>
+            <div className="avatar">مع</div>
+            <button className="role-select" onClick={() => setRole(role === "المدير العام" ? "مدير المبيعات" : "المدير العام")}><span>{role}</span><ChevronDown size={14} /></button>
+          </div>
+          {showNotifications && <div className="notification-popover"><div className="flex items-center justify-between"><div className="font-bold text-[#243e3a]">التنبيهات</div><span className="text-[11px] text-[#c06d46]">٣ جديدة</span></div><div className="notification-item"><div className="notification-icon orange"><ClipboardList size={15} /></div><div><div className="text-xs font-bold">طلب جديد من سوبر ماركت الإيمان</div><div className="mt-1 text-[10px] text-[#89928f]">منذ 18 دقيقة</div></div></div><div className="notification-item"><div className="notification-icon red"><AlertTriangle size={15} /></div><div><div className="text-xs font-bold">مخزون نكهة الفراولة منخفض</div><div className="mt-1 text-[10px] text-[#89928f]">مخزن المواد الخام</div></div></div></div>}
+        </header>
+        <div className="content-wrap">{renderPage()}</div>
       </main>
     </div>
   );
+}
+
+function DashboardPage({ orders, onApprove }: { orders: Order[]; onApprove: (id: string) => void }) {
+  return <>
+    <section className="hero-card"><div className="hero-copy"><div className="hero-kicker"><span className="spark">✦</span> مركز التشغيل اليومي</div><h2>صباح الخير يا محمد،<br /><span>التشغيل تحت السيطرة.</span></h2><p>نظرة سريعة على حركة الطلبات، المخزون والتصنيع في مصنع بيور.</p><div className="hero-actions"><button className="primary-button" onClick={() => toast.info("يمكنك فتح الطلبات من القائمة الجانبية")}>مراجعة الطلبات <ArrowLeft size={16} /></button><button className="ghost-button" onClick={() => toast.info("تقرير الأداء سيصبح متاحاً بعد ربط البيانات الحقيقية")}>تقرير الأداء <BarChart3 size={16} /></button></div></div><div className="hero-visual"><div className="hero-ring ring-one" /><div className="hero-ring ring-two" /><div className="hero-product product-one">كريم<br /><b>كراميل</b></div><div className="hero-product product-two">PURE<br /><b>جيلي</b></div><div className="hero-stat"><div className="text-[10px] text-[#728580]">قيمة مبيعات اليوم</div><div className="mt-1 text-[18px] font-bold text-[#243e3a]">٣٦,٤٢٠ <small className="text-[10px]">ج.م</small></div><div className="mt-1 flex items-center gap-1 text-[10px] text-[#4f8d72]"><ArrowUpRight size={12} /> ١٨.٦٪ عن أمس</div></div></div></section>
+    <div className="stats-grid"><StatCard title="طلبات اليوم" value="٢٤" detail="منذ بداية اليوم" icon={ClipboardList} tone="orange" trend="12%" /><StatCard title="قيمة المخزون" value="٣٣٩,٥٥٠" detail="جنيه مصري" icon={Boxes} tone="sage" trend="8.4%" /><StatCard title="قيد التصنيع" value="٧" detail="دورات إنتاج نشطة" icon={Factory} tone="blue" /><StatCard title="فواتير بانتظار الاعتماد" value="٤" detail="تحتاج مراجعة" icon={FileCheck2} tone="rose" /></div>
+    <div className="dashboard-grid mt-5"><div className="panel order-panel"><PanelHeader title="آخر الطلبات" meta="عرض كل الطلبات" icon={ClipboardList} /><div className="order-list">{orders.slice(0, 4).map((order) => <div className="order-row" key={order.id}><div className="order-avatar" style={{ background: order.color }}>{order.trader.split(" ").slice(0, 2).map((w) => w[0]).join("")}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate text-[13px] font-bold text-[#2e4440]">{order.trader}</span><span className="text-[10px] text-[#a0aaa7]">{order.id}</span></div><div className="mt-1 text-[11px] text-[#86908d]">{order.items} • {order.area}</div></div><div className="hidden text-left sm:block"><div className="text-[13px] font-bold text-[#2d4641]">{order.total}</div><div className="mt-1 text-[10px] text-[#9ca6a3]">{order.time}</div></div><div className="flex items-center gap-2"><StatusBadge status={order.status} />{order.status === "معلق" && <button className="mini-approve" onClick={() => onApprove(order.id)}><Check size={14} /></button>}</div></div>)}</div></div><div className="panel stock-panel"><PanelHeader title="تنبيهات المخزون" meta="حسب الأولوية" icon={AlertTriangle} /><div className="stock-alert"><div className="flex items-center gap-3"><div className="stock-alert-icon red"><AlertTriangle size={16} /></div><div><div className="text-[12px] font-bold text-[#344842]">نكهة فراولة</div><div className="mt-1 text-[10px] text-[#9a827b]">متبقي 8.4 كجم فقط</div></div></div><span className="critical-badge">حرج</span></div><div className="stock-alert"><div className="flex items-center gap-3"><div className="stock-alert-icon orange"><Package size={16} /></div><div><div className="text-[12px] font-bold text-[#344842]">علب كريم كراميل</div><div className="mt-1 text-[10px] text-[#9a827b]">متبقي 240 قطعة</div></div></div><span className="warning-badge">منخفض</span></div><div className="stock-alert"><div className="flex items-center gap-3"><div className="stock-alert-icon green"><CheckCircle2 size={16} /></div><div><div className="text-[12px] font-bold text-[#344842]">سكر أبيض</div><div className="mt-1 text-[10px] text-[#9a827b]">المخزون آمن</div></div></div><span className="safe-badge">جيد</span></div><button className="full-link-button" onClick={() => toast.info("انتقل إلى شاشة المخزون من القائمة")}>إدارة المخزون <ArrowLeft size={14} /></button></div></div>
+    <div className="dashboard-grid mt-5"><div className="panel warehouse-panel"><PanelHeader title="توزيع المخزون حسب الموقع" meta="القيمة الحالية" icon={Warehouse} /><div className="warehouse-chart"><div className="donut-chart"><div className="donut-inner"><b>٣٣٩</b><span>ألف ج.م</span></div></div><div className="legend-list"><div><span className="legend-dot" style={{ background: "#386e66" }} />المخزن الرئيسي <b>٥٤٪</b></div><div><span className="legend-dot" style={{ background: "#d8895c" }} />مخزن الباكدجنج <b>٢٣٪</b></div><div><span className="legend-dot" style={{ background: "#a8b99d" }} />عربيات التوزيع <b>٢٣٪</b></div></div></div></div><div className="panel activity-panel"><PanelHeader title="نشاط الفريق" meta="اليوم" icon={UsersRound} /><div className="activity-row"><div className="avatar avatar-small green-avatar">أح</div><div className="min-w-0 flex-1"><div className="text-[12px] font-bold">أحمد حسن سجّل حضور وانصراف</div><div className="mt-1 text-[10px] text-[#9ba4a1]">منذ ١٢ دقيقة • موقع الفرع الرئيسي</div></div><span className="activity-check"><Check size={13} /></span></div><div className="activity-row"><div className="avatar avatar-small orange-avatar">سع</div><div className="min-w-0 flex-1"><div className="text-[12px] font-bold">سارة علي اعتمدت فاتورة #INV-1092</div><div className="mt-1 text-[10px] text-[#9ba4a1]">منذ ٣٥ دقيقة</div></div><span className="activity-check"><Check size={13} /></span></div><div className="activity-row"><div className="avatar avatar-small blue-avatar">مع</div><div className="min-w-0 flex-1"><div className="text-[12px] font-bold">محمد عادل نقل بضاعة إلى توزيع القاهرة</div><div className="mt-1 text-[10px] text-[#9ba4a1]">منذ ساعة</div></div><span className="activity-check"><Check size={13} /></span></div></div></div>
+  </>;
+}
+
+function PanelHeader({ title, meta, icon: Icon }: { title: string; meta: string; icon: typeof Boxes }) { return <div className="panel-header"><div className="flex items-center gap-2"><div className="panel-icon"><Icon size={16} /></div><h3>{title}</h3></div><button onClick={() => toast.info(meta)} className="panel-meta">{meta}<ArrowLeft size={12} /></button></div>; }
+
+function OrdersPage({ orders, search, setSearch, onApprove }: { orders: Order[]; search: string; setSearch: (value: string) => void; onApprove: (id: string) => void }) {
+  return <div className="page-stack"><div className="page-intro"><div><div className="eyebrow">التجارة والتوزيع</div><h2>الطلبات الواردة</h2><p>تابع طلبات التجار من لحظة الاستلام وحتى الخصم من المخزون.</p></div><button className="primary-button" onClick={() => toast.success("تم فتح نموذج طلب جديد")}>طلب جديد <Plus size={17} /></button></div><div className="toolbar"><div className="search-box"><Search size={17} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث برقم الطلب أو اسم التاجر" /></div><div className="filter-pills"><button className="filter-pill active">كل الطلبات <span>١٢</span></button><button className="filter-pill">معلقة <span>٣</span></button><button className="filter-pill">قيد التجهيز <span>٥</span></button><button className="filter-pill">مكتملة <span>٤</span></button></div></div><div className="panel table-panel"><div className="table-scroll"><table><thead><tr><th>رقم الطلب</th><th>التاجر</th><th>طريقة الطلب</th><th>الأصناف</th><th>القيمة</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>{orders.map((order) => <tr key={order.id}><td><span className="font-bold text-[#344a45]">{order.id}</span><div className="mt-1 text-[10px] text-[#a4adaa]">{order.time}</div></td><td><div className="flex items-center gap-2"><div className="order-avatar small" style={{ background: order.color }}>{order.trader.slice(0, 1)}</div><div><div className="font-bold">{order.trader}</div><div className="mt-1 text-[10px] text-[#96a19d]">{order.area}</div></div></div></td><td><span className="channel-badge">{order.channel === "مندوب" ? <Truck size={12} /> : <Store size={12} />}{order.channel}</span></td><td className="text-[#6e7d78]">{order.items}</td><td className="font-bold">{order.total}</td><td><StatusBadge status={order.status} /></td><td>{order.status === "معلق" ? <button className="approve-button" onClick={() => onApprove(order.id)}><Check size={14} /> اعتماد</button> : <button className="more-button" onClick={() => toast.info(`تفاصيل ${order.id}`)}><MoreHorizontal size={17} /></button>}</td></tr>)}</tbody></table></div></div></div>;
+}
+
+function InventoryPage({ warehouse, setWarehouse }: { warehouse: string; setWarehouse: (value: string) => void }) {
+  return <div className="page-stack"><div className="page-intro"><div><div className="eyebrow">المخزون والتوزيع</div><h2>المخازن والأرصدة</h2><p>كل حركة مخزون لها مصدر ووجهة وسجل واضح.</p></div><div className="flex gap-2"><button className="secondary-button" onClick={() => toast.success("تم فتح نموذج تحويل مخزون")}><ArrowRightLeft size={16} /> تحويل بين المخازن</button><button className="primary-button" onClick={() => toast.success("تم فتح نموذج إضافة رصيد افتتاحي")}><Plus size={17} /> إضافة مخزن</button></div></div><div className="warehouse-cards">{warehouses.map((item) => <div className={`warehouse-card ${item.tone}`} key={item.code}><div className="flex items-start justify-between"><div className="warehouse-symbol"><Warehouse size={17} /></div><span className="code-chip">{item.code}</span></div><div className="mt-5 text-[14px] font-bold text-[#2d4842]">{item.name}</div><div className="mt-1 text-[11px] text-[#7d8b86]">{item.type}</div><div className="mt-5 flex items-end justify-between"><div><div className="text-[11px] text-[#81908a]">قيمة المخزون</div><div className="mt-1 text-[20px] font-bold tracking-[-0.05em] text-[#2b4841]">{item.value} <small className="text-[10px] font-normal">ج.م</small></div></div><div className="text-left"><div className="text-[11px] text-[#81908a]">الامتلاء</div><div className="mt-1 text-[13px] font-bold text-[#547367]">{item.stock}</div></div></div><div className="mt-4 h-1.5 rounded-full bg-black/10"><div className="h-full rounded-full bg-[#47796e]" style={{ width: item.stock }} /></div></div>)}</div><div className="split-grid"><div className="panel"><PanelHeader title="مستويات الخامات" meta="عرض حركة المخزون" icon={Package} />{ingredients.map((ingredient) => <div className="ingredient-row" key={ingredient.name}><div className="ingredient-bullet" style={{ background: ingredient.color }} /><div className="min-w-0 flex-1"><div className="flex justify-between gap-2"><span className="text-[12px] font-bold text-[#374c47]">{ingredient.name}</span><span className="text-[11px] font-semibold text-[#778580]">{ingredient.qty}</span></div><div className="mt-2 h-2 rounded-full bg-[#edf0ed]"><div className="h-full rounded-full" style={{ width: `${ingredient.level}%`, background: ingredient.level < 30 ? "#cf6650" : ingredient.color }} /></div></div></div>)}</div><div className="panel"><PanelHeader title="كشف حركة المخزون" meta="آخر 24 ساعة" icon={ArrowRightLeft} /><div className="movement-row"><span className="movement-icon in"><ArrowDownLeft size={15} /></span><div className="flex-1"><b>استلام خامات إنتاج</b><span>المخزن الرئيسي • اليوم 11:42</span></div><strong className="text-[#4b8a71]">+ ٢٤٠ كجم</strong></div><div className="movement-row"><span className="movement-icon out"><ArrowUpRight size={15} /></span><div className="flex-1"><b>تحويل لتوزيع القاهرة</b><span>المخزن الرئيسي • اليوم 10:18</span></div><strong className="text-[#c3694d]">− ٨٥ وحدة</strong></div><div className="movement-row"><span className="movement-icon out"><Factory size={15} /></span><div className="flex-1"><b>صرف لدورة تصنيع</b><span>كريم كراميل • اليوم 09:22</span></div><strong className="text-[#c3694d]">− ٢ كجم</strong></div><button className="full-link-button" onClick={() => toast.info("سجل الحركة الكامل قيد الربط بقاعدة البيانات")}>فتح سجل الحركة <ArrowLeft size={14} /></button></div></div></div>;
+}
+
+function ProductionPage() {
+  const [recipe, setRecipe] = useState("كريم كراميل 80 جم");
+  return <div className="page-stack"><div className="page-intro"><div><div className="eyebrow">التصنيع والوصفات</div><h2>دورات الإنتاج</h2><p>أنشئ دورة تصنيع وسيتم خصم مكونات الوصفة من المخزن تلقائياً.</p></div><button className="primary-button" onClick={() => toast.success("تم إنشاء دورة تصنيع جديدة")}>دورة تصنيع <Plus size={17} /></button></div><div className="production-layout"><div className="panel recipe-panel"><PanelHeader title="إنشاء دورة تصنيع" meta="وصفة المنتج" icon={Factory} /><div className="field-label">المنتج النهائي</div><div className="select-field"><select value={recipe} onChange={(e) => setRecipe(e.target.value)}><option>كريم كراميل 80 جم</option><option>جيلي فراولة 70 جم</option><option>خلطة كريسبي حار 250 جم</option></select><ChevronDown size={15} /></div><div className="field-label mt-5">الكمية المطلوب تصنيعها</div><div className="quantity-row"><input defaultValue="20" /><span>كرتونة</span><div className="conversion-note">= 40 كجم خام</div></div><div className="recipe-preview"><div className="flex items-center justify-between"><div><div className="text-[12px] font-bold text-[#344b45]">الوصفة المعتمدة</div><div className="mt-1 text-[10px] text-[#8a9793]">آخر تعديل منذ 3 أيام بواسطة المدير العام</div></div><span className="approved-chip"><CheckCircle2 size={13} /> معتمدة</span></div><div className="recipe-lines"><div><span>سكر أبيض</span><b>١٠٠ جم</b></div><div><span>نكهة كريم كراميل</span><b>١٠ جم</b></div><div><span>ملح غذائي</span><b>٢٠ جم</b></div><div><span>عبوة + كرتونة</span><b>١ وحدة</b></div></div></div><button className="primary-button w-full justify-center" onClick={() => toast.success(`تم بدء تصنيع ${recipe}`)}>بدء دورة التصنيع <Factory size={16} /></button></div><div className="panel"><PanelHeader title="دورات التصنيع النشطة" meta="كل الدورات" icon={ClipboardList} /><div className="production-card active"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="production-icon"><Factory size={18} /></div><div><div className="text-[13px] font-bold">كريم كراميل 80 جم</div><div className="mt-1 text-[10px] text-[#8d9995]">دورة #BATCH-0902 • بدأ 09:22 ص</div></div></div><span className="in-progress-chip"><span />قيد التصنيع</span></div><div className="mt-5 flex items-end justify-between"><div className="text-[11px] text-[#8b9793]">التقدم <b className="mr-1 text-[#385e55]">٦٥٪</b></div><div className="text-[11px] text-[#8b9793]">١٣ من ٢٠ كرتونة</div></div><div className="mt-2 h-2 rounded-full bg-[#e7ebe7]"><div className="h-full w-[65%] rounded-full bg-[#467b6d]" /></div><div className="mt-4 flex justify-between text-[10px] text-[#98a49f]"><span>صرف الخامات ✓</span><span>التعبئة جارية</span><span>الفحص النهائي</span></div></div><div className="production-card"><div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="production-icon peach"><Package size={18} /></div><div><div className="text-[13px] font-bold">جيلي فراولة 70 جم</div><div className="mt-1 text-[10px] text-[#8d9995]">دورة #BATCH-0901 • بدأ أمس</div></div></div><span className="done-chip"><Check size={13} /> مكتملة</span></div><div className="mt-4 text-[11px] text-[#788781]">تم إنتاج <b className="text-[#385e55]">١٢٠ كرتونة</b> وتحويلها إلى مخزن التوزيع.</div></div></div></div></div>;
+}
+
+function PartnersPage() {
+  return <div className="page-stack"><div className="page-intro"><div><div className="eyebrow">شبكة التجار</div><h2>التجار والعملاء</h2><p>ملف موحد لكل تاجر، بعناوينه وطلباته والمندوب المسؤول عنه.</p></div><button className="primary-button" onClick={() => toast.success("تم فتح نموذج إضافة تاجر")}>إضافة تاجر <Plus size={17} /></button></div><div className="partner-overview"><div className="partner-overview-card"><UsersRound size={19} /><div><b>١,٢٨٤</b><span>إجمالي التجار</span></div></div><div className="partner-overview-card"><MapPinned size={19} /><div><b>١,١٠٨</b><span>عناوين نشطة</span></div></div><div className="partner-overview-card"><Truck size={19} /><div><b>١٢</b><span>مندوب مرتبط</span></div></div><div className="partner-overview-card"><ArrowUpRight size={19} /><div><b>٨٧٪</b><span>معدل إعادة الطلب</span></div></div></div><div className="panel table-panel"><div className="panel-header"><div className="flex items-center gap-2"><div className="panel-icon"><UsersRound size={16} /></div><h3>دليل التجار</h3></div><div className="search-box compact"><Search size={15} /><input placeholder="بحث بالاسم أو الهاتف" /></div></div><div className="table-scroll"><table><thead><tr><th>التاجر</th><th>الهاتف</th><th>المنطقة</th><th>المندوب المسؤول</th><th>آخر طلب</th><th>الحالة</th><th /></tr></thead><tbody>{[{ n: "سوبر ماركت الإيمان", p: "0101 234 5678", a: "مدينة نصر", r: "أحمد حسن", o: "منذ 18 دقيقة", s: "نشط" }, { n: "ماركت أولاد رجب", p: "0112 889 3210", a: "المعادي", r: "كريم محمود", o: "منذ 42 دقيقة", s: "نشط" }, { n: "البركة للتجارة", p: "0127 440 9182", a: "الهرم", r: "أحمد حسن", o: "أمس، 04:20 م", s: "نشط" }, { n: "محمود عطية", p: "0109 675 4432", a: "شبرا", r: "بدون مندوب", o: "منذ 3 أيام", s: "مراجعة" }].map((partner) => <tr key={partner.p}><td><div className="flex items-center gap-2"><div className="avatar avatar-small light-avatar">{partner.n.slice(0, 1)}</div><span className="font-bold">{partner.n}</span></div></td><td className="text-[#6d7c77]">{partner.p}</td><td>{partner.a}</td><td><span className="rep-chip">{partner.r}</span></td><td className="text-[#7c8b86]">{partner.o}</td><td><span className={partner.s === "نشط" ? "safe-badge" : "warning-badge"}>{partner.s}</span></td><td><button className="more-button" onClick={() => toast.info(`ملف ${partner.n}`)}><MoreHorizontal size={17} /></button></td></tr>)}</tbody></table></div></div></div>;
+}
+
+function InvoicesPage() {
+  const [selected, setSelected] = useState<string | null>(null);
+  const invoices = [{ id: "#INV-1092", trader: "سوبر ماركت الإيمان", rep: "أحمد حسن", total: "4,820 ج.م", date: "16 سبتمبر 2026", status: "بانتظار الاعتماد" }, { id: "#INV-1091", trader: "ماركت أولاد رجب", rep: "كريم محمود", total: "2,340 ج.م", date: "16 سبتمبر 2026", status: "معتمدة" }, { id: "#INV-1090", trader: "البركة للتجارة", rep: "أحمد حسن", total: "1,120 ج.م", date: "15 سبتمبر 2026", status: "معتمدة" }, { id: "#INV-1089", trader: "محمود عطية", rep: "سارة علي", total: "8,760 ج.م", date: "15 سبتمبر 2026", status: "تم الإرسال للعميل" }];
+  return <div className="page-stack"><div className="page-intro"><div><div className="eyebrow">المبيعات والتحصيل</div><h2>الفواتير</h2><p>اعتمد، راجع وأرسل تفاصيل الفاتورة للعميل عبر واتساب.</p></div><button className="secondary-button" onClick={() => toast.info("التقرير سيُصدّر بعد ربط البيانات")}>تصدير التقرير <ArrowUpRight size={16} /></button></div><div className="invoice-summary"><div><span>إجمالي اليوم</span><b>١٧,٠٤٠ <small>ج.م</small></b></div><div><span>بانتظار الاعتماد</span><b className="orange-text">٤</b></div><div><span>معتمدة اليوم</span><b className="green-text">١٨</b></div><div><span>متوسط الفاتورة</span><b>٣,٤٠٨ <small>ج.م</small></b></div></div><div className="panel table-panel"><div className="table-scroll"><table><thead><tr><th>رقم الفاتورة</th><th>التاجر</th><th>المندوب</th><th>القيمة</th><th>التاريخ</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>{invoices.map((invoice) => <tr key={invoice.id}><td className="font-bold text-[#344a45]">{invoice.id}</td><td>{invoice.trader}</td><td><span className="rep-chip">{invoice.rep}</span></td><td className="font-bold">{invoice.total}</td><td className="text-[#84908c]">{invoice.date}</td><td><span className={invoice.status === "بانتظار الاعتماد" ? "warning-badge" : "safe-badge"}>{invoice.status}</span></td><td><div className="flex gap-2">{invoice.status === "بانتظار الاعتماد" ? <button className="approve-button" onClick={() => { setSelected(invoice.id); toast.success("تم اعتماد الفاتورة وخصم الكمية من المخزن"); }}><Check size={14} /> اعتماد</button> : <button className="send-button" onClick={() => toast.success("تم تجهيز رسالة واتساب بالبيانات واللوكيشن") }><Send size={14} /> واتساب</button>}<button className="more-button" onClick={() => setSelected(invoice.id)}><MoreHorizontal size={17} /></button></div></td></tr>)}</tbody></table></div></div>{selected && <div className="inline-note"><CheckCircle2 size={17} /> تم تحديد {selected} — جاهز لمراجعة التفاصيل وإرسالها للعميل.</div>}</div>;
+}
+
+function TeamPage() {
+  const [checked, setChecked] = useState<string[]>(["أحمد حسن", "كريم محمود"]);
+  const toggle = (name: string) => setChecked((value) => value.includes(name) ? value.filter((item) => item !== name) : [...value, name]);
+  return <div className="page-stack"><div className="page-intro"><div><div className="eyebrow">فريق المبيعات</div><h2>الحضور والانصراف</h2><p>تسجيل إلزامي بالوقت والموقع لكل مندوب ميداني.</p></div><button className="primary-button" onClick={() => toast.info("سجل الحضور اليومي سيُعرض هنا")}>سجل اليوم <CalendarDays size={16} /></button></div><div className="attendance-banner"><div className="attendance-copy"><div className="hero-kicker"><Fingerprint size={15} /> حضور ميداني موثق</div><h3>٤ من ٦ أعضاء سجلوا حضورهم اليوم</h3><p>آخر تحديث منذ 6 دقائق، جميع التسجيلات مرتبطة بإحداثيات الموقع.</p></div><div className="attendance-ring"><b>٦٧٪</b><span>حضور</span></div></div><div className="panel table-panel"><div className="panel-header"><div className="flex items-center gap-2"><div className="panel-icon"><UsersRound size={16} /></div><h3>حالة الفريق اليوم</h3></div><span className="text-[11px] text-[#8a9792]">آخر مزامنة: 09:18 ص</span></div><div className="table-scroll"><table><thead><tr><th>المندوب</th><th>الدور</th><th>الحضور</th><th>وقت التسجيل</th><th>الموقع</th><th>الطلبات اليوم</th><th>تحديد</th></tr></thead><tbody>{reps.map((rep) => <tr key={rep.name}><td><div className="flex items-center gap-2"><div className="avatar avatar-small" style={{ background: rep.color }}>{rep.initials}</div><span className="font-bold">{rep.name}</span></div></td><td className="text-[#7c8a85]">{rep.role}</td><td><span className={rep.today === "حاضر" ? "safe-badge" : rep.today === "متأخر" ? "warning-badge" : "critical-badge"}>{rep.today}</span></td><td className="font-semibold">{rep.time}</td><td><span className="location-chip"><MapPinned size={12} />{rep.today === "غائب" ? "—" : "الفرع الرئيسي"}</span></td><td className="font-bold text-[#375b53]">{rep.orders}</td><td><button className={`check-box ${checked.includes(rep.name) ? "checked" : ""}`} onClick={() => toggle(rep.name)}>{checked.includes(rep.name) && <Check size={14} />}</button></td></tr>)}</tbody></table></div></div></div>;
+}
+
+function SettingsPage() {
+  const [push, setPush] = useState(true);
+  const [lowStock, setLowStock] = useState(true);
+  return <div className="page-stack"><div className="page-intro"><div><div className="eyebrow">التحكم في النظام</div><h2>الإعدادات والصلاحيات</h2><p>صمّم طريقة تشغيل النظام حسب أدوار فريقك.</p></div><button className="secondary-button" onClick={() => toast.success("تم حفظ الإعدادات")}>حفظ التغييرات <Check size={16} /></button></div><div className="settings-layout"><div className="panel permissions-panel"><PanelHeader title="الأدوار والصلاحيات" meta="إدارة المستخدمين" icon={UserCog} /><div className="role-line selected"><div className="role-avatar dark">م</div><div className="flex-1"><b>المدير العام</b><span>صلاحية كاملة • ١ مستخدم</span></div><ShieldCheck size={17} className="text-[#4d8376]" /></div><div className="role-line"><div className="role-avatar green">س</div><div className="flex-1"><b>مدير المبيعات</b><span>الطلبات، الفواتير، التجار • ١ مستخدم</span></div><ChevronDown size={15} className="text-[#9aa5a1]" /></div><div className="role-line"><div className="role-avatar orange">أ</div><div className="flex-1"><b>المندوب</b><span>طلبات العملاء، الفواتير، الحضور • ٦ مستخدمين</span></div><ChevronDown size={15} className="text-[#9aa5a1]" /></div><button className="full-link-button mt-3" onClick={() => toast.success("تم فتح نموذج إضافة مستخدم")}>إضافة مستخدم ودور جديد <Plus size={14} /></button></div><div className="panel settings-panel"><PanelHeader title="الإشعارات" meta="تُرسل فوراً" icon={Bell} /><ToggleRow title="إشعارات الطلبات الجديدة" caption="للمدير العام ومدير المبيعات" value={push} onChange={() => setPush(!push)} /><ToggleRow title="تنبيه انخفاض المخزون" caption="عند الوصول إلى الحد الأدنى" value={lowStock} onChange={() => setLowStock(!lowStock)} /><ToggleRow title="تحديثات الحضور الميداني" caption="تسجيل الحضور واللوكيشن" value={true} onChange={() => toast.info("هذا التنبيه إلزامي للمندوبين")} locked /></div></div><div className="panel audit-panel"><PanelHeader title="سجل العمليات" meta="عرض السجل الكامل" icon={ClipboardList} /><div className="audit-row"><Clock3 size={15} /><div><b>اعتماد فاتورة #INV-1091</b><span>سارة علي • مدير المبيعات • منذ 35 دقيقة</span></div><span className="audit-tag">فاتورة</span></div><div className="audit-row"><ArrowRightLeft size={15} /><div><b>تحويل ٨٥ وحدة إلى توزيع القاهرة</b><span>محمد عادل • المدير العام • منذ ساعة</span></div><span className="audit-tag">مخزون</span></div><div className="audit-row"><UserCog size={15} /><div><b>تعديل وصفة كريم كراميل</b><span>محمد عادل • المدير العام • أمس، 03:14 م</span></div><span className="audit-tag">تصنيع</span></div></div></div>;
+}
+
+function ToggleRow({ title, caption, value, onChange, locked }: { title: string; caption: string; value: boolean; onChange: () => void; locked?: boolean }) { return <div className="toggle-row"><div><b>{title}</b><span>{caption}</span></div><button className={`toggle ${value ? "on" : ""}`} onClick={onChange} disabled={locked}><span /></button></div>; }
+
+function Storefront({ cart, onBack, onAdd }: { cart: string[]; onBack: () => void; onAdd: (name: string) => void }) {
+  return <div className="store-shell" dir="rtl"><header className="store-topbar"><BrandMark /><div className="store-links"><span>المنتجات</span><span>الطلبات السابقة</span><span>بيانات المتجر</span></div><div className="flex items-center gap-3"><button className="store-cart"><ShoppingBag size={18} /><span>{cart.length}</span></button><button className="store-account"><div className="avatar avatar-small">س</div><span>سوبر ماركت الإيمان</span><ChevronDown size={14} /></button><button className="back-admin" onClick={onBack}>لوحة الإدارة <ArrowLeft size={15} /></button></div></header><main className="store-content"><section className="store-hero"><div><div className="hero-kicker">تشكيلة بيور • طلبات الجملة</div><h1>كل مذاق تحبه،<br /><span>يوصل لباب متجرك.</span></h1><p>اطلب منتجات PURE بالجملة، تابع حالة الشحنة واحفظ عناوين فروعك في حساب واحد.</p><button className="primary-button" onClick={() => document.getElementById("store-products")?.scrollIntoView({ behavior: "smooth" })}>ابدأ الطلب <ArrowLeft size={16} /></button></div><div className="store-hero-image"><img src="/manus-storage/pure-products_01e1c073.png" alt="منتجات PURE" /><div className="image-caption"><span>منتجات PURE الأصلية</span><b>تشكيلة سبتمبر ٢٠٢٦</b></div></div></section><section id="store-products" className="store-product-section"><div className="page-intro"><div><div className="eyebrow">كتالوج الجملة</div><h2>منتجاتك المفضلة</h2></div><div className="store-stock-note"><CheckCircle2 size={15} /> المخزون متاح للشحن اليوم</div></div><div className="product-grid">{products.map((product) => <div className="product-card" key={product.sku}><div className="product-art" style={{ background: `linear-gradient(145deg, ${product.color}, #69342e)` }}><span>PURE</span><b>{product.name.split(" ").slice(0, 2).join(" ")}</b><i>{product.name.includes("كريم") ? "80 جم" : product.name.includes("جيلي") ? "70 جم" : "250 جم"}</i></div><div className="mt-4 text-[13px] font-bold text-[#29453f]">{product.name}</div><div className="mt-1 text-[10px] text-[#92a09a]">كود المنتج: {product.sku}</div><div className="mt-4 flex items-center justify-between"><div><span className="text-[11px] text-[#89948f]">سعر الكرتونة</span><div className="mt-1 text-[17px] font-bold text-[#2d5349]">{product.price} <small className="text-[10px]">ج.م</small></div></div><button className="add-product" onClick={() => onAdd(product.name)}><Plus size={16} /></button></div><div className="mt-3 flex items-center gap-1 text-[10px] text-[#5f8974]"><CheckCircle2 size={12} /> متوفر • {product.stock} كرتونة</div></div>)}</div></section><section className="store-benefits"><div><Smartphone size={19} /><b>اطلب من أي مكان</b><span>تطبيق ويب قابل للتثبيت على الموبايل</span></div><div><Truck size={19} /><b>تتبع الشحنة</b><span>اعرف حالة طلبك لحظة بلحظة</span></div><div><MapPinned size={19} /><b>عناوين متعددة</b><span>احفظ فروعك ومواقع التسليم</span></div><div><Send size={19} /><b>تأكيد سريع</b><span>تأكيد الطلب عبر واتساب</span></div></section></main><footer className="store-footer"><BrandMark /><span>© ٢٠٢٦ مصنع بيور للمواد الغذائية</span><span className="text-[#a1aaa6]">للمساعدة: ١٦٠٣٢</span></footer></div>;
 }

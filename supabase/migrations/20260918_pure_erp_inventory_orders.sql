@@ -152,3 +152,9 @@ begin
     insert into public.erp_stock_movements(product_id, from_warehouse_id, quantity, movement_type, reference) values (product_id, store_id, qty, 'sale', coalesce(p_reference, 'بيع نهائي من المتجر'));
   end loop;
 end; $$;
+
+create or replace function public.get_public_orders_by_phone(p_phone text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  return coalesce((select jsonb_agg(public.get_public_order_tracking(o.order_number, p_phone) order by o.created_at desc) from public.orders o where o.phone = p_phone), '[]'::jsonb);
+end; $$;

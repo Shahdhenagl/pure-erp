@@ -90,7 +90,7 @@ begin
   select * into o from public.orders where order_number=p_order_number and (p_phone is null or phone=p_phone) limit 1;
   if not found then return null; end if;
   select jsonb_build_object(
-    'order', to_jsonb(o) || jsonb_build_object('representative_name', o.representative_name, 'representative_phone', o.representative_phone, 'customer_note', o.customer_note),
+    'order', jsonb_build_object('id', o.id, 'order_number', o.order_number, 'total', o.total, 'status', o.status, 'created_at', o.created_at, 'representative_name', o.representative_name, 'representative_phone', o.representative_phone, 'sales_rep', case when o.representative_name is not null then jsonb_build_object('name', o.representative_name, 'phone', o.representative_phone) else null end, 'customer_note', o.customer_note),
     'events', coalesce((select jsonb_agg(to_jsonb(e) order by e.created_at) from public.order_status_events e where e.order_id=o.id and e.visible_to_customer), '[]'::jsonb)
   ) into result;
   return result;
@@ -120,36 +120,20 @@ end; $$;
 
 create or replace function public.erp_finalize_sale(p_items jsonb, p_reference text default null)
 returns void language plpgsql security definer set search_path = public as $$
-declare item jsonb; product_id uuid; qty numeric; distribution_id uuid; store_id uuid;
+declare item jsonb; v_product_id uuid; qty numeric; distribution_id uuid; store_id uuid; dist_qty numeric; store_qty numeric;
 begin
   select id into distribution_id from public.erp_warehouses where warehouse_type='distribution' order by code limit 1;
   select id into store_id from public.erp_warehouses where warehouse_type='store' order by code limit 1;
   if distribution_id is null or store_id is null then raise exception 'مخزن التوزيع أو المتجر غير معرف'; end if;
   for item in select * from jsonb_array_elements(p_items) loop
-    product_id := (item->>'product_id')::uuid; qty := coalesce((item->>'quantity')::numeric, 0);
+    v_product_id := (item->>'product_id')::uuid; qty := coalesce((item->>'quantity')::numeric, 0);
     if qty <= 0 then continue; end if;
-    perform public.erp_transfer_stock(product_id, distribution_id, store_id, qty, coalesce(p_reference, 'بيع نهائي من المتجر'));
-    update public.erp_stock_balances set quantity=quantity-qty, updated_at=now() where product_id=product_id and warehouse_id=store_id;
-    insert into public.erp_stock_movements(product_id, from_warehouse_id, quantity, movement_type, reference) values (product_id, store_id, qty, 'sale', coalesce(p_reference, 'بيع نهائي من المتجر'));
-  end loop;
-end; $$;
-
-create or replace function public.erp_finalize_sale(p_items jsonb, p_reference text default null)
-returns void language plpgsql security definer set search_path = public as $$
-declare item jsonb; product_id uuid; qty numeric; distribution_id uuid; store_id uuid; dist_qty numeric; store_qty numeric;
-begin
-  select id into distribution_id from public.erp_warehouses where warehouse_type='distribution' order by code limit 1;
-  select id into store_id from public.erp_warehouses where warehouse_type='store' order by code limit 1;
-  if distribution_id is null or store_id is null then raise exception 'مخزن التوزيع أو المتجر غير معرف'; end if;
-  for item in select * from jsonb_array_elements(p_items) loop
-    product_id := (item->>'product_id')::uuid; qty := coalesce((item->>'quantity')::numeric, 0);
-    if qty <= 0 then continue; end if;
-    select quantity into dist_qty from public.erp_stock_balances where product_id=erp_finalize_sale.product_id and warehouse_id=distribution_id for update;
-    select quantity into store_qty from public.erp_stock_balances where product_id=erp_finalize_sale.product_id and warehouse_id=store_id for update;
+    select quantity into dist_qty from public.erp_stock_balances sb where sb.product_id=v_product_id and sb.warehouse_id=distribution_id for update;
+    select quantity into store_qty from public.erp_stock_balances sb where sb.product_id=v_product_id and sb.warehouse_id=store_id for update;
     if coalesce(dist_qty, 0) < qty or coalesce(store_qty, 0) < qty then raise exception 'رصيد المنتج غير كاف في التوزيع أو المتجر'; end if;
-    update public.erp_stock_balances set quantity=quantity-qty, updated_at=now() where product_id=erp_finalize_sale.product_id and warehouse_id in (distribution_id, store_id);
-    insert into public.erp_stock_movements(product_id, from_warehouse_id, quantity, movement_type, reference) values (product_id, distribution_id, qty, 'sale', coalesce(p_reference, 'بيع نهائي من المتجر'));
-    insert into public.erp_stock_movements(product_id, from_warehouse_id, quantity, movement_type, reference) values (product_id, store_id, qty, 'sale', coalesce(p_reference, 'بيع نهائي من المتجر'));
+    update public.erp_stock_balances sb set quantity=sb.quantity-qty, updated_at=now() where sb.product_id=v_product_id and sb.warehouse_id in (distribution_id, store_id);
+    insert into public.erp_stock_movements(product_id, from_warehouse_id, quantity, movement_type, reference) values (v_product_id, distribution_id, qty, 'sale', coalesce(p_reference, 'بيع نهائي من المتجر'));
+    insert into public.erp_stock_movements(product_id, from_warehouse_id, quantity, movement_type, reference) values (v_product_id, store_id, qty, 'sale', coalesce(p_reference, 'بيع نهائي من المتجر'));
   end loop;
 end; $$;
 

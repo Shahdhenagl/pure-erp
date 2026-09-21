@@ -1,6 +1,51 @@
 -- PURE ERP: products, warehouses, stock ledger, public order tracking
 create extension if not exists pgcrypto;
 
+create table if not exists public.orders (
+  id uuid primary key default gen_random_uuid(),
+  order_number text not null unique,
+  business_name text not null,
+  contact_name text,
+  phone text not null,
+  address text not null default '',
+  latitude numeric,
+  longitude numeric,
+  notes text,
+  total numeric(12,2) not null default 0,
+  status text not null default 'معلق',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.trader_accounts (
+  id uuid primary key default gen_random_uuid(),
+  phone text not null unique,
+  business_name text not null,
+  contact_name text,
+  password_hash text not null,
+  created_at timestamptz not null default now()
+);
+
+create or replace function public.erp_trader_signup(p_phone text, p_password text, p_business_name text, p_contact_name text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare normalized_phone text; new_id uuid;
+begin
+  normalized_phone := regexp_replace(trim(p_phone), '[^0-9+]', '', 'g');
+  if length(normalized_phone) < 8 then raise exception 'رقم الهاتف غير صحيح'; end if;
+  if length(coalesce(p_password, '')) < 6 then raise exception 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'; end if;
+  if exists (select 1 from public.trader_accounts where phone=normalized_phone) then raise exception 'رقم الهاتف مستخدم بالفعل'; end if;
+  insert into public.trader_accounts(phone,business_name,contact_name,password_hash) values (normalized_phone,trim(p_business_name),nullif(trim(p_contact_name),''),extensions.crypt(p_password,extensions.gen_salt('bf'))) returning id into new_id;
+  return jsonb_build_object('id',new_id,'phone',normalized_phone,'business_name',trim(p_business_name));
+end; $$;
+
+create or replace function public.erp_trader_login(p_phone text, p_password text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare account public.trader_accounts;
+begin
+  select * into account from public.trader_accounts where phone=regexp_replace(trim(p_phone), '[^0-9+]', '', 'g') limit 1;
+  if not found or account.password_hash <> extensions.crypt(p_password, account.password_hash) then raise exception 'رقم الهاتف أو كلمة المرور غير صحيحة'; end if;
+  return jsonb_build_object('id',account.id,'phone',account.phone,'business_name',account.business_name,'contact_name',account.contact_name);
+end; $$;
+
 create table if not exists public.erp_products (
   id uuid primary key default gen_random_uuid(),
   sku text not null unique,

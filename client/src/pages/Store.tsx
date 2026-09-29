@@ -54,10 +54,23 @@ export default function StorePage() {
   });
   const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null);
 
-  // Sync state with erpStore
+  // Sync state with erpStore and handle pending reorder
   useEffect(() => {
     setProducts(erpStore.getFinishedProducts());
     setTrader(erpStore.getTrader());
+
+    const pending = erpStore.getPendingReorder();
+    if (pending && pending.length > 0) {
+      const nextCart: Record<string, number> = {};
+      pending.forEach((item) => {
+        nextCart[item.productId] = item.quantity;
+      });
+      setCart(nextCart);
+      setIsCartOpen(true);
+      erpStore.clearPendingReorder();
+      toast.success("تم تجهيز أصناف طلبيتك السابقة في السلة بنجاح!");
+    }
+
     return erpStore.subscribe(() => {
       setProducts(erpStore.getFinishedProducts());
       setTrader(erpStore.getTrader());

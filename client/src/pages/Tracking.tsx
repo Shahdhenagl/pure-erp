@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   Truck,
   Search,
@@ -15,15 +15,21 @@ import {
   Check,
   ChevronLeft,
   Store,
+  Printer,
+  RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner";
 import { erpStore, Order, Trader } from "@/lib/erpStore";
+import PrintableInvoiceModal from "@/components/PrintableInvoiceModal";
 
 export default function TrackingPage() {
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [traderOrders, setTraderOrders] = useState<Order[]>([]);
   const [trader, setTrader] = useState<Trader | null>(null);
   const [searchAttempted, setSearchAttempted] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // Check URL parameters for prefilled order
   useEffect(() => {
@@ -212,6 +218,37 @@ export default function TrackingPage() {
               </div>
             </div>
 
+            {/* Quick Action Buttons: 1-Click Reorder & Print Invoice */}
+            <div className="mt-4 pt-3 flex flex-wrap items-center justify-between gap-3 bg-[#f8faf8] p-3 rounded-2xl border border-[#e5ebe6]">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const items = selectedOrder.items.map((i) => ({
+                      productId: i.product_id,
+                      quantity: i.quantity,
+                    }));
+                    erpStore.setPendingReorder(items);
+                    toast.success("تم تجهيز أصناف هذا الطلب في سلة الشراء!");
+                    setLocation("/store?open_cart=true");
+                  }}
+                  className="px-4 py-2 bg-[#256149] hover:bg-[#1b4d3a] text-white text-xs font-black rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw size={14} />
+                  <span>إعادة طلب هذه الكمية مجدداً (طلب سريع)</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsPrintModalOpen(true)}
+                  className="px-3.5 py-2 bg-white hover:bg-[#edf5f0] text-[#1c3e34] border border-[#d0ded5] text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer size={14} className="text-[#c75e3a]" />
+                  <span>طباعة الفاتورة / إيصال الاستلام</span>
+                </button>
+              </div>
+            </div>
+
             {/* Representative & Vehicle Card (if shipped or assigned) */}
             {selectedOrder.representative_name && (
               <div className="mt-6 bg-[#f4f8f5] border border-[#dce7e0] rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -390,6 +427,14 @@ export default function TrackingPage() {
           </div>
         </div>
       </main>
+
+      {/* Printable Invoice Modal */}
+      {isPrintModalOpen && selectedOrder && (
+        <PrintableInvoiceModal
+          order={selectedOrder}
+          onClose={() => setIsPrintModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

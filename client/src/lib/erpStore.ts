@@ -1050,4 +1050,90 @@ export const erpStore = {
     const q = query.trim().toUpperCase();
     return _orders.find((o) => o.order_number.toUpperCase() === q || o.phone.includes(q));
   },
+
+  // 7. Reorder pending storage
+  setPendingReorder(items: { productId: string; quantity: number }[]) {
+    try {
+      localStorage.setItem("pure_pending_reorder", JSON.stringify(items));
+    } catch {}
+  },
+
+  getPendingReorder(): { productId: string; quantity: number }[] | null {
+    try {
+      const raw = localStorage.getItem("pure_pending_reorder");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  clearPendingReorder() {
+    try {
+      localStorage.removeItem("pure_pending_reorder");
+    } catch {}
+  },
+
+  // 8. Smart Production Planner & Shortage Calculator
+  calculateBOMRequirements(recipeId: string, quantity: number) {
+    const recipe = _recipes.find((r) => r.id === recipeId);
+    if (!recipe) return null;
+
+    const multiplier = quantity / (recipe.output_quantity || 1);
+    let hasShortage = false;
+
+    const items = recipe.items.map((item) => {
+      const targetWhId = item.item_type === "packaging" ? "wh-pkg-02" : "wh-raw-01";
+      const available = this.getStock(item.ingredient_id, targetWhId);
+      const required = item.required_quantity * multiplier;
+      const shortage = Math.max(0, required - available);
+      if (shortage > 0) hasShortage = true;
+
+      return {
+        ...item,
+        required,
+        available,
+        shortage,
+        isSufficient: shortage === 0,
+      };
+    });
+
+    const finishedProduct = _products.find((p) => p.id === recipe.product_id);
+    const unitPrice = finishedProduct ? finishedProduct.sale_price * (1 - finishedProduct.discount_percent / 100) : 0;
+    const estimatedRevenue = unitPrice * quantity;
+
+    return {
+      recipe,
+      quantity,
+      finishedProduct,
+      estimatedRevenue,
+      hasShortage,
+      items,
+    };
+  },
+
+  // 9. Low Stock Warnings
+  getLowStockAlerts() {
+    const alerts: { product: Product; warehouse: Warehouse; quantity: number; threshold: number }[] = [];
+    const rawWh = _warehouses.find((w) => w.id === "wh-raw-01");
+    const pkgWh = _warehouses.find((w) => w.id === "wh-pkg-02");
+
+    this.getRawMaterials().forEach((prod) => {
+      const qty = this.getStock(prod.id, "wh-raw-01");
+      const threshold = 100; // 100 kg threshold
+      if (qty < threshold && rawWh) {
+        alerts.push({ product: prod, warehouse: rawWh, quantity: qty, threshold });
+      }
+    });
+
+    this.getPackagingMaterials().forEach((prod) => {
+      const qty = this.getStock(prod.id, "wh-pkg-02");
+      const threshold = 1000; // 1000 pcs threshold
+      if (qty < threshold && pkgWh) {
+        alerts.push({ product: prod, warehouse: pkgWh, quantity: qty, threshold });
+      }
+    });
+
+    return alerts;
+  },
 };
+

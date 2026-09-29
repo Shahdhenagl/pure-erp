@@ -24,6 +24,8 @@ import {
   RefreshCw,
   X,
   FileCheck2,
+  Printer,
+  Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -35,6 +37,7 @@ import {
   StockMovement,
   Order,
 } from "@/lib/erpStore";
+import PrintableInvoiceModal from "@/components/PrintableInvoiceModal";
 
 type DashboardTab = "overview" | "manufacturing" | "warehouses" | "orders" | "movements";
 
@@ -54,6 +57,13 @@ export default function DashboardPage() {
   const [pkgWhId, setPkgWhId] = useState("wh-pkg-02");
   const [distWhId, setDistWhId] = useState("wh-dist-03");
   const [productionNotes, setProductionNotes] = useState("");
+
+  // Production Planner & Shortage Calculator state
+  const [plannerRecipeId, setPlannerRecipeId] = useState("");
+  const [plannerQty, setPlannerQty] = useState<number>(50);
+
+  // Selected Order for Invoice Print
+  const [orderForPrint, setOrderForPrint] = useState<Order | null>(null);
 
   // Transfer Form Modal
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -80,12 +90,25 @@ export default function DashboardPage() {
     if (r.length && !selectedRecipeId) {
       setSelectedRecipeId(r[0].id);
     }
+    if (r.length && !plannerRecipeId) {
+      setPlannerRecipeId(r[0].id);
+    }
   };
 
   useEffect(() => {
     loadState();
     return erpStore.subscribe(loadState);
   }, []);
+
+  const plannerCalc = useMemo(() => {
+    const targetRecipeId = plannerRecipeId || selectedRecipeId;
+    if (!targetRecipeId) return null;
+    return erpStore.calculateBOMRequirements(targetRecipeId, plannerQty);
+  }, [plannerRecipeId, selectedRecipeId, plannerQty, products, warehouses]);
+
+  const lowStockAlerts = useMemo(() => {
+    return erpStore.getLowStockAlerts();
+  }, [products, warehouses]);
 
   // Selected Recipe details
   const activeRecipe = useMemo(() => {
@@ -534,6 +557,90 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* Smart Production Planner & Shortage Calculator */}
+                {plannerCalc && (
+                  <div className="bg-white rounded-3xl border border-[#e2e8e2] p-6 shadow-xs">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-[#f0f6f3] text-[#256149] flex items-center justify-center font-bold">
+                          <Calculator size={17} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black text-[#1c3e34]">
+                            حاسبة تخطيط الإنتاج والنواقص الذكية
+                          </h3>
+                          <p className="text-[11px] text-[#6e857b]">
+                            احسب احتياجات أي طلبية واكتشف عجز الخامات وتكلفة الإنتاج قبل التشغيل
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-[#c75e3a] bg-[#fff3ee] px-2.5 py-1 rounded-md">
+                        مبيعات متوقعة: {plannerCalc.estimatedRevenue.toFixed(0)} ج.م
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#446357] mb-1">
+                          الوصفة المستهدفة:
+                        </label>
+                        <select
+                          value={plannerRecipeId}
+                          onChange={(e) => setPlannerRecipeId(e.target.value)}
+                          className="w-full p-2 text-xs bg-[#f6f9f7] border border-[#d2ddd6] rounded-xl font-bold"
+                        >
+                          {recipes.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#446357] mb-1">
+                          الكمية المستهدفة ({plannerCalc.recipe.unit}):
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={plannerQty}
+                          onChange={(e) => setPlannerQty(Math.max(1, Number(e.target.value)))}
+                          className="w-full p-2 text-xs bg-[#f6f9f7] border border-[#d2ddd6] rounded-xl font-black"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-[#edf1ed] border border-[#e4ebe5] rounded-2xl overflow-hidden text-xs">
+                      {plannerCalc.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`p-3 flex items-center justify-between ${
+                            item.isSufficient ? "bg-white" : "bg-[#fdf3f2]"
+                          }`}
+                        >
+                          <div>
+                            <span className="font-extrabold text-[#1c3e34]">{item.ingredient_name}</span>
+                            <span className="text-[10px] text-[#788e84] mr-2">
+                              (المطلوب: {item.required.toFixed(2)} {item.unit})
+                            </span>
+                          </div>
+                          <div>
+                            {item.isSufficient ? (
+                              <span className="text-[11px] font-bold text-[#2b8a4f] bg-[#eef7f2] px-2 py-0.5 rounded-md">
+                                متوفر بالمخزن ({item.available.toFixed(1)} {item.unit}) ✓
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-black text-[#c75e3a] bg-[#ffeeeb] px-2 py-0.5 rounded-md">
+                                عجز مخزون: {item.shortage.toFixed(2)} {item.unit} مطلوب شراؤها! ⚠️
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -781,15 +888,24 @@ export default function DashboardPage() {
                           </span>
                         </td>
                         <td className="p-3.5">
-                          <button
-                            onClick={() => {
-                              setOrderModal(ord);
-                              setNewOrderStatus(ord.status);
-                            }}
-                            className="px-3 py-1.5 bg-[#edf4f0] hover:bg-[#256149] hover:text-white text-[#256149] font-bold rounded-lg transition-colors text-[11px]"
-                          >
-                            تحديث الحالة
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setOrderModal(ord);
+                                setNewOrderStatus(ord.status);
+                              }}
+                              className="px-2.5 py-1.5 bg-[#edf4f0] hover:bg-[#256149] hover:text-white text-[#256149] font-bold rounded-lg transition-colors text-[11px] whitespace-nowrap cursor-pointer"
+                            >
+                              تحديث الحالة
+                            </button>
+                            <button
+                              onClick={() => setOrderForPrint(ord)}
+                              title="طباعة الفاتورة الضريبية"
+                              className="p-1.5 bg-[#f5f8f5] hover:bg-[#e2ebe5] text-[#256149] border border-[#d6dfd9] rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Printer size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1048,6 +1164,14 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Printable Invoice Modal */}
+      {orderForPrint && (
+        <PrintableInvoiceModal
+          order={orderForPrint}
+          onClose={() => setOrderForPrint(null)}
+        />
       )}
     </div>
   );

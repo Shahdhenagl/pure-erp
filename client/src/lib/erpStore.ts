@@ -643,6 +643,7 @@ let _batches: ProductionBatch[] = loadFromStorage("batches", INITIAL_BATCHES);
 let _orders: Order[] = loadFromStorage("orders", INITIAL_ORDERS);
 let _movements: StockMovement[] = loadFromStorage("movements", []);
 let _trader: Trader | null = loadFromStorage("trader", null);
+let _pendingReorder: { productId: string; quantity: number }[] | null = null;
 
 const listeners = new Set<() => void>();
 function notify() {
@@ -1053,23 +1054,31 @@ export const erpStore = {
 
   // 7. Reorder pending storage
   setPendingReorder(items: { productId: string; quantity: number }[]) {
+    _pendingReorder = items;
     try {
-      localStorage.setItem("pure_pending_reorder", JSON.stringify(items));
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("pure_pending_reorder", JSON.stringify(items));
+      }
     } catch {}
   },
 
   getPendingReorder(): { productId: string; quantity: number }[] | null {
+    if (_pendingReorder) return _pendingReorder;
     try {
-      const raw = localStorage.getItem("pure_pending_reorder");
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
+      if (typeof window !== "undefined" && window.localStorage) {
+        const raw = localStorage.getItem("pure_pending_reorder");
+        if (raw) return JSON.parse(raw);
+      }
+    } catch {}
+    return null;
   },
 
   clearPendingReorder() {
+    _pendingReorder = null;
     try {
-      localStorage.removeItem("pure_pending_reorder");
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.removeItem("pure_pending_reorder");
+      }
     } catch {}
   },
 

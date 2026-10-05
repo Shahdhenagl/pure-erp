@@ -51,8 +51,7 @@ export default function TrackingPage() {
     if (t) {
       setTraderOrders(erpStore.getOrdersForPhone(t.phone));
     } else {
-      // Default to first few recent orders for easy demo
-      setTraderOrders(erpStore.getOrders().slice(0, 5));
+      setTraderOrders([]);
     }
 
     return erpStore.subscribe(() => {
@@ -61,7 +60,7 @@ export default function TrackingPage() {
       if (updatedTrader) {
         setTraderOrders(erpStore.getOrdersForPhone(updatedTrader.phone));
       } else {
-        setTraderOrders(erpStore.getOrders().slice(0, 5));
+        setTraderOrders([]);
       }
       if (selectedOrder) {
         const refreshed = erpStore.findOrder(selectedOrder.order_number);
@@ -379,7 +378,7 @@ export default function TrackingPage() {
         <div className="mt-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-black text-[#1b3e34]">
-              {trader ? `طلبات متجر ${trader.business_name}:` : "آخر الطلبات المسجلة في النظام:"}
+              {trader ? `طلبات متجر ${trader.business_name}:` : "سجّل دخول حساب التاجر لعرض طلباتك:"}
             </h2>
             <span className="text-xs text-[#6e857b]">اضغط على أي طلب لعرض تفاصيله وموقعه</span>
           </div>

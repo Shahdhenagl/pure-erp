@@ -29,6 +29,7 @@ export default function StorePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [trader, setTrader] = useState<Trader | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("الكل");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   
   // Cart: Map of productId -> quantity
@@ -448,6 +449,13 @@ export default function StorePage() {
                     <p className="mt-1 text-[11px] text-[#6d8279] line-clamp-2 leading-relaxed">
                       {product.description}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProduct(product)}
+                      className="mt-2 text-[10px] font-black text-[#256149] hover:text-[#c75e3a]"
+                    >
+                      عرض تفاصيل المنتج ←
+                    </button>
                   </div>
                 </div>
 
@@ -886,6 +894,26 @@ export default function StorePage() {
         </div>
       )}
 
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-[#dce3de] animate-in zoom-in-95">
+            <div className="flex items-center justify-between p-4 border-b border-[#e6eae6]">
+              <h3 className="font-extrabold text-sm text-[#1b3e34]">تفاصيل المنتج</h3>
+              <button onClick={() => setSelectedProduct(null)} className="p-1.5 hover:bg-[#f0f2f0] rounded-lg text-[#6d7c76]"><X size={18} /></button>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-6 p-6">
+              <img src={selectedProduct.image_url} alt={selectedProduct.name} className="w-full h-56 object-contain rounded-2xl bg-[#f4f7f4]" />
+              <div className="flex flex-col justify-center">
+                <span className="text-[10px] font-mono text-[#82998f]">{selectedProduct.sku}</span>
+                <h2 className="mt-2 text-xl font-black text-[#193a30]">{selectedProduct.name}</h2>
+                <p className="mt-3 text-xs leading-6 text-[#6d8279]">{selectedProduct.description || "منتج بيور أصلي للتوريد بالجملة من مصنع بيور."}</p>
+                <strong className="mt-4 text-xl text-[#1b4e3c]">{(selectedProduct.sale_price * (1 - selectedProduct.discount_percent / 100)).toFixed(2)} <small className="text-xs font-normal">ج.م</small></strong>
+                <button onClick={() => { addToCart(selectedProduct.id); setSelectedProduct(null); }} className="mt-5 w-full py-3 bg-[#256149] hover:bg-[#1c4d3a] text-white text-xs font-bold rounded-xl">إضافة إلى السلة</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Store Footer */}
       <footer className="mt-16 bg-white border-t border-[#e2e8e3] py-10 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 text-xs text-[#6e857c]">

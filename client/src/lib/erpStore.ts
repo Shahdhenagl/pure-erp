@@ -83,6 +83,16 @@ export interface StockMovement {
   created_at: string;
 }
 
+export interface WarehouseProfile {
+  warehouse: Warehouse;
+  total_items: number;
+  total_quantity: number;
+  movement_count: number;
+  last_movement_at?: string;
+  balances: { product: Product; quantity: number }[];
+  recent_movements: StockMovement[];
+}
+
 export type OrderStatus = "معلق" | "قيد التجهيز" | "خرج للشحن" | "تم التسليم" | "ملغي";
 
 export interface OrderItem {
@@ -711,6 +721,84 @@ export const erpStore = {
     return _movements;
   },
 
+  getWarehouseProfile(warehouseId: string): WarehouseProfile | null {
+    const warehouse = _warehouses.find((item) => item.id === warehouseId);
+    if (!warehouse) return null;
+    const balances = _stock
+      .filter((item) => item.warehouse_id === warehouseId && item.quantity !== 0)
+      .map((item) => ({
+        product: _products.find((product) => product.id === item.product_id),
+        quantity: item.quantity,
+      }))
+      .filter((item): item is { product: Product; quantity: number } => Boolean(item.product));
+    const recentMovements = _movements.filter(
+      (movement) => movement.from_warehouse_id === warehouseId || movement.to_warehouse_id === warehouseId
+    );
+    return {
+      warehouse,
+      total_items: balances.length,
+      total_quantity: balances.reduce((sum, item) => sum + item.quantity, 0),
+      movement_count: recentMovements.length,
+      last_movement_at: recentMovements[0]?.created_at,
+      balances,
+      recent_movements: recentMovements.slice(0, 20),
+    };
+  },
+
+  adjustStock(params: {
+    productId: string;
+    warehouseId: string;
+    countedQuantity: number;
+    reason: string;
+    reference?: string;
+  }): { success: boolean; message: string; difference?: number } {
+    if (params.countedQuantity < 0 || !Number.isFinite(params.countedQuantity)) {
+      return { success: false, message: "كمية الجرد لا يمكن أن تكون سالبة" };
+    }
+    if (!params.reason.trim()) return { success: false, message: "اكتب سبب الجرد أو التسوية" };
+    const warehouse = _warehouses.find((item) => item.id === params.warehouseId);
+    const product = _products.find((item) => item.id === params.productId);
+    if (!warehouse || !product) return { success: false, message: "المخزن أو الصنف غير موجود" };
+    const currentQuantity = this.getStock(params.productId, params.warehouseId);
+    const difference = Number((params.countedQuantity - currentQuantity).toFixed(4));
+    if (difference === 0) {
+      _movements.unshift({
+        id: `mov-${Date.now()}-${Math.random()}`,
+        product_id: product.id,
+        product_name: product.name,
+        to_warehouse_id: warehouse.id,
+        to_warehouse_name: warehouse.name,
+        quantity: 0,
+        movement_type: "adjustment",
+        reference: `${params.reference || "جرد مخزني"} — لا يوجد فرق — ${params.reason.trim()}`,
+        created_at: new Date().toISOString(),
+      });
+      notify();
+      return { success: true, message: "تم حفظ الجرد بدون فرق", difference: 0 };
+    }
+    const balanceIndex = _stock.findIndex((item) => item.product_id === product.id && item.warehouse_id === warehouse.id);
+    if (balanceIndex >= 0) _stock[balanceIndex] = { ..._stock[balanceIndex], quantity: params.countedQuantity };
+    else _stock.push({ product_id: product.id, warehouse_id: warehouse.id, quantity: params.countedQuantity });
+    _movements.unshift({
+      id: `mov-${Date.now()}-${Math.random()}`,
+      product_id: product.id,
+      product_name: product.name,
+      ...(difference > 0
+        ? { to_warehouse_id: warehouse.id, to_warehouse_name: warehouse.name }
+        : { from_warehouse_id: warehouse.id, from_warehouse_name: warehouse.name }),
+      quantity: Math.abs(difference),
+      movement_type: "adjustment",
+      reference: `${params.reference || "جرد مخزني"} — ${difference > 0 ? "زيادة" : "عجز"} — ${params.reason.trim()}`,
+      created_at: new Date().toISOString(),
+    });
+    notify();
+    return {
+      success: true,
+      message: `تم اعتماد الجرد وتسجيل ${difference > 0 ? "زيادة" : "عجز"} قدرها ${Math.abs(difference)} ${product.unit}`,
+      difference,
+    };
+  },
+
   getTrader(): Trader | null {
     return _trader;
   },
@@ -1145,4 +1233,3 @@ export const erpStore = {
     return alerts;
   },
 };
-

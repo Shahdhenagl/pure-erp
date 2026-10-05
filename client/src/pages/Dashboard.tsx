@@ -26,6 +26,8 @@ import {
   FileCheck2,
   Printer,
   Calculator,
+  ClipboardCheck,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -72,6 +74,13 @@ export default function DashboardPage() {
   const [transferToWh, setTransferToWh] = useState("van-01");
   const [transferQuantity, setTransferQuantity] = useState<number>(10);
 
+  // Warehouse profile & stocktake state
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState("wh-raw-01");
+  const [isStocktakeModalOpen, setIsStocktakeModalOpen] = useState(false);
+  const [stocktakeProductId, setStocktakeProductId] = useState("");
+  const [stocktakeQuantity, setStocktakeQuantity] = useState<number>(0);
+  const [stocktakeReason, setStocktakeReason] = useState("");
+
   // Selected Order for Status Update Modal
   const [orderModal, setOrderModal] = useState<Order | null>(null);
   const [newOrderStatus, setNewOrderStatus] = useState<Order["status"]>("قيد التجهيز");
@@ -109,6 +118,13 @@ export default function DashboardPage() {
   const lowStockAlerts = useMemo(() => {
     return erpStore.getLowStockAlerts();
   }, [products, warehouses]);
+
+  const selectedWarehouseProfile = useMemo(
+    () => erpStore.getWarehouseProfile(selectedWarehouseId),
+    [selectedWarehouseId, warehouses, products, movements]
+  );
+
+  const selectedStocktakeProduct = products.find((product) => product.id === stocktakeProductId);
 
   // Selected Recipe details
   const activeRecipe = useMemo(() => {
@@ -185,6 +201,28 @@ export default function DashboardPage() {
     } else {
       toast.error(result.message);
     }
+  };
+
+  const openStocktake = (warehouseId: string, productId?: string) => {
+    setSelectedWarehouseId(warehouseId);
+    setStocktakeProductId(productId || "");
+    setStocktakeQuantity(productId ? erpStore.getStock(productId, warehouseId) : 0);
+    setStocktakeReason("");
+    setIsStocktakeModalOpen(true);
+  };
+
+  const handleStocktake = (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = erpStore.adjustStock({
+      productId: stocktakeProductId,
+      warehouseId: selectedWarehouseId,
+      countedQuantity: Number(stocktakeQuantity),
+      reason: stocktakeReason,
+      reference: `جرد ${selectedWarehouseProfile?.warehouse.name || "المخزن"}`,
+    });
+    if (!result.success) return toast.error(result.message);
+    toast.success(result.message);
+    setIsStocktakeModalOpen(false);
   };
 
   // Handle Order Status Update
@@ -693,7 +731,8 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={wh.id}
-                    className="bg-white rounded-3xl border border-[#e2e8e2] p-5 shadow-xs flex flex-col justify-between"
+                    onClick={() => setSelectedWarehouseId(wh.id)}
+                    className={`bg-white rounded-3xl border p-5 shadow-xs flex flex-col justify-between cursor-pointer transition-all ${selectedWarehouseId === wh.id ? "border-[#256149] ring-2 ring-[#dceee4]" : "border-[#e2e8e2] hover:border-[#b9d5c5]"}`}
                   >
                     <div>
                       <div className="flex items-center justify-between mb-3">
@@ -721,10 +760,45 @@ export default function DashboardPage() {
                       <span className="text-[#758c82]">عدد الأصناف:</span>
                       <span className="font-black text-[#1c3e34]">{itemsCount} أصناف مخزنة</span>
                     </div>
+                    <button
+                      onClick={(event) => { event.stopPropagation(); openStocktake(wh.id); }}
+                      className="mt-3 w-full py-2 bg-[#f5f8f5] hover:bg-[#edf5f0] text-[#256149] text-[11px] font-black rounded-xl flex items-center justify-center gap-1.5"
+                    >
+                      <ClipboardCheck size={14} /> جرد هذا المخزن
+                    </button>
                   </div>
                 );
               })}
             </div>
+
+            {selectedWarehouseProfile && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-4 bg-white rounded-3xl border border-[#e2e8e2] p-6 shadow-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-black text-[#c75e3a]">بروفايل المخزن</div>
+                      <h3 className="mt-1 text-lg font-black text-[#1c3e34]">{selectedWarehouseProfile.warehouse.name}</h3>
+                      <p className="mt-1 text-[11px] text-[#71887e]">{selectedWarehouseProfile.warehouse.code} • {selectedWarehouseProfile.warehouse.location}</p>
+                    </div>
+                    <Warehouse size={22} className="text-[#256149]" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-5">
+                    <div className="p-3 rounded-2xl bg-[#f3f8f4]"><span className="block text-[10px] text-[#71887e]">الأصناف</span><b className="text-lg text-[#256149]">{selectedWarehouseProfile.total_items}</b></div>
+                    <div className="p-3 rounded-2xl bg-[#fff7ee]"><span className="block text-[10px] text-[#8b796c]">إجمالي الوحدات</span><b className="text-lg text-[#b37012]">{selectedWarehouseProfile.total_quantity.toFixed(2)}</b></div>
+                    <div className="p-3 rounded-2xl bg-[#f1f6ff]"><span className="block text-[10px] text-[#7183a0]">عدد الحركات</span><b className="text-lg text-[#1f66be]">{selectedWarehouseProfile.movement_count}</b></div>
+                    <div className="p-3 rounded-2xl bg-[#f7f4fb]"><span className="block text-[10px] text-[#81728f]">آخر حركة</span><b className="text-[11px] text-[#6e4c86]">{selectedWarehouseProfile.last_movement_at ? new Date(selectedWarehouseProfile.last_movement_at).toLocaleDateString("ar-EG") : "لا يوجد"}</b></div>
+                  </div>
+                  <button onClick={() => openStocktake(selectedWarehouseProfile.warehouse.id)} className="mt-4 w-full py-3 bg-[#256149] hover:bg-[#1a4a37] text-white text-xs font-black rounded-xl flex items-center justify-center gap-2"><ClipboardCheck size={16} /> بدء جرد شامل للمخزن</button>
+                </div>
+                <div className="lg:col-span-8 bg-white rounded-3xl border border-[#e2e8e2] p-6 shadow-xs">
+                  <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-[#1c3e34] flex items-center gap-2"><History size={17} className="text-[#256149]" /> كشف بروفايل المخزن</h3><span className="text-[10px] text-[#71887e]">الأرصدة الحالية وآخر الحركات</span></div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="border border-[#e7eee8] rounded-2xl overflow-hidden"><div className="p-3 bg-[#fbfcfb] text-[11px] font-black text-[#557064]">الأرصدة المتبقية</div>{selectedWarehouseProfile.balances.slice(0, 8).map(({ product, quantity }) => <div key={product.id} className="p-3 border-t border-[#edf1ed] flex items-center justify-between text-[11px]"><span className="font-bold text-[#344f45]">{product.name}</span><b className={quantity <= 0 ? "text-[#c75e3a]" : "text-[#256149]"}>{quantity} {product.unit}</b></div>)}{!selectedWarehouseProfile.balances.length && <div className="p-4 text-[11px] text-[#8a9a92]">لا توجد أرصدة حالية</div>}</div>
+                    <div className="border border-[#e7eee8] rounded-2xl overflow-hidden"><div className="p-3 bg-[#fbfcfb] text-[11px] font-black text-[#557064]">آخر الحركات</div>{selectedWarehouseProfile.recent_movements.slice(0, 6).map((movement) => <div key={movement.id} className="p-3 border-t border-[#edf1ed] flex items-center justify-between text-[11px]"><div><b className="block text-[#344f45]">{movement.product_name}</b><span className="text-[10px] text-[#8a9a92]">{movement.reference}</span></div><strong className={movement.to_warehouse_id === selectedWarehouseId ? "text-[#256149]" : "text-[#c75e3a]"}>{movement.to_warehouse_id === selectedWarehouseId ? "+" : "−"}{movement.quantity}</strong></div>)}{!selectedWarehouseProfile.recent_movements.length && <div className="p-4 text-[11px] text-[#8a9a92]">لا توجد حركات لهذا المخزن</div>}</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Warehouse Stock Matrix / Balances Table */}
             <div className="bg-white rounded-3xl border border-[#e2e8e2] p-6 shadow-xs">
@@ -991,6 +1065,24 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      {isStocktakeModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-[#dce3de] animate-in zoom-in-95">
+            <div className="p-5 bg-linear-to-r from-[#1c3e34] to-[#256149] text-white flex items-center justify-between">
+              <div><h3 className="font-extrabold text-base">جرد وتسوية المخزن</h3><p className="text-xs text-[#c6ded3] mt-0.5">{selectedWarehouseProfile?.warehouse.name}</p></div>
+              <button onClick={() => setIsStocktakeModalOpen(false)} className="p-1 hover:bg-white/10 rounded-lg"><X size={18} /></button>
+            </div>
+            <form onSubmit={handleStocktake} className="p-6 space-y-4">
+              <div><label className="block text-xs font-bold text-[#2d473e] mb-1">الصنف المراد جرده *</label><select value={stocktakeProductId} onChange={(e) => { const id = e.target.value; setStocktakeProductId(id); setStocktakeQuantity(id ? erpStore.getStock(id, selectedWarehouseId) : 0); }} className="w-full p-2.5 text-xs bg-[#f6f9f7] border border-[#d6dfd9] rounded-xl font-bold" required><option value="">-- اختر الصنف --</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name} ({product.unit})</option>)}</select></div>
+              <div className="grid grid-cols-2 gap-3"><div className="p-3 rounded-xl bg-[#f5f8f5]"><span className="block text-[10px] text-[#71887e]">الرصيد بالنظام</span><b className="text-lg text-[#256149]">{stocktakeProductId ? erpStore.getStock(stocktakeProductId, selectedWarehouseId) : 0} {selectedStocktakeProduct?.unit || "وحدة"}</b></div><div><label className="block text-xs font-bold text-[#2d473e] mb-1">الكمية الفعلية *</label><input type="number" min="0" step="0.001" value={stocktakeQuantity} onChange={(e) => setStocktakeQuantity(Math.max(0, Number(e.target.value)))} className="w-full p-2.5 text-sm bg-[#f6f9f7] border border-[#d6dfd9] rounded-xl font-black" required /></div></div>
+              <div><label className="block text-xs font-bold text-[#2d473e] mb-1">سبب الجرد / التسوية *</label><textarea value={stocktakeReason} onChange={(e) => setStocktakeReason(e.target.value)} placeholder="مثال: جرد نهاية الشهر، كسر، فاقد، أو استلام توريد" className="w-full p-2.5 text-xs bg-[#f6f9f7] border border-[#d6dfd9] rounded-xl" rows={3} required /></div>
+              <div className="p-3 rounded-xl bg-[#fff8ed] border border-[#f5e4c5] text-[11px] text-[#8b6b32]">سيتم حساب الفرق تلقائياً وتسجيله كزيادة أو عجز في سجل حركة المخزن.</div>
+              <div className="flex items-center gap-3 pt-2"><button type="submit" className="flex-1 py-3 bg-[#256149] hover:bg-[#1a4a37] text-white text-xs font-black rounded-xl shadow-md">اعتماد الجرد وتسجيل الحركة</button><button type="button" onClick={() => setIsStocktakeModalOpen(false)} className="px-4 py-3 bg-[#e8eee9] text-[#344d44] text-xs font-bold rounded-xl">إلغاء</button></div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Transfer Stock between Warehouses (تحويل بضاعة لسيارات التوزيع) */}
       {isTransferModalOpen && (

@@ -183,7 +183,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "كرتونة",
     sale_price: 312,
     discount_percent: 0,
-    image_url: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=600&auto=format&fit=crop&q=80",
+    image_url: "/manus-storage/pure-product-caramel_cfe4b965.jpg",
     category: "كريم كراميل ومعلبات",
     description: "كريم كراميل ناعم وغني مصنوع من أجود المكونات الطبيعية ومناسب للحلويات المنزلية والمطاعم.",
   },
@@ -195,7 +195,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "كرتونة",
     sale_price: 216,
     discount_percent: 5,
-    image_url: "https://images.unsplash.com/photo-1579954115545-a95591f28bfc?w=600&auto=format&fit=crop&q=80",
+    image_url: "/manus-storage/pure-product-strawberry-jelly_530780c7.jpg",
     category: "جيلي وسناكس",
     description: "جيلي فراولة طبيعي بدون ألوان صناعية ضارة، نكهة منعشة قوية ومحبوبة للأطفال والكبار.",
   },
@@ -207,7 +207,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "كرتونة",
     sale_price: 216,
     discount_percent: 0,
-    image_url: "https://images.unsplash.com/photo-1553279768-865429fa0078?w=600&auto=format&fit=crop&q=80",
+    image_url: "/manus-storage/pure-product-mango-jelly_0cd2c579.jpg",
     category: "جيلي وسناكس",
     description: "جيلي مانجو بنكهة الفواكه الاستوائية الطبيعية، يذوب بسهولة وسريع التحضير.",
   },
@@ -219,7 +219,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "كرتونة",
     sale_price: 156,
     discount_percent: 0,
-    image_url: "https://images.unsplash.com/photo-1625944230945-1b7dd3b949ab?w=600&auto=format&fit=crop&q=80",
+    image_url: "/manus-storage/pure-product-crispy-mix_5fa9c9ec.jpg",
     category: "بهارات وخلطات",
     description: "خلطة تتبيل وقرمشة الدجاج الحارة بمزيج توابل شرقية سرية تعطي قرمشة ذهبية مثالية.",
   },
@@ -231,7 +231,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "شيكارة",
     sale_price: 425,
     discount_percent: 0,
-    image_url: "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=600&auto=format&fit=crop&q=80",
+    image_url: "/manus-storage/pure-product-basmati_0ce3aa7c.jpg",
     category: "بقوليات ومكسرات",
     description: "أرز بسمتي هندي حبة طويلة أصلي معتق، خالي من الشوائب ورائحة عطرة فريدة.",
   },
@@ -644,9 +644,19 @@ function saveToStorage<T>(key: string, data: T) {
   }
 }
 
+function loadProductsWithCurrentImages(): Product[] {
+  const stored = loadFromStorage<Product[]>("products", INITIAL_PRODUCTS);
+  const currentImages = new Map(INITIAL_PRODUCTS.map((product) => [product.id, product.image_url]));
+  return stored.map((product) => {
+    const currentImage = currentImages.get(product.id);
+    const isLegacyImage = !product.image_url || product.image_url.includes("images.unsplash.com");
+    return currentImage && isLegacyImage ? { ...product, image_url: currentImage } : product;
+  });
+}
+
 // Global in-memory state with persistence
 let _warehouses: Warehouse[] = loadFromStorage("warehouses", INITIAL_WAREHOUSES);
-let _products: Product[] = loadFromStorage("products", INITIAL_PRODUCTS);
+let _products: Product[] = loadProductsWithCurrentImages();
 let _stock: StockBalance[] = loadFromStorage("stock", INITIAL_STOCK);
 let _recipes: Recipe[] = loadFromStorage("recipes", INITIAL_RECIPES);
 let _batches: ProductionBatch[] = loadFromStorage("batches", INITIAL_BATCHES);

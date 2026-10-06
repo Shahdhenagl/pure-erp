@@ -183,7 +183,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "كرتونة",
     sale_price: 312,
     discount_percent: 0,
-    image_url: "/manus-storage/pure-product-caramel_cfe4b965.jpg",
+    image_url: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663954061026/wlEDRjhCdHZnSQSf.jpg",
     category: "كريم كراميل ومعلبات",
     description: "كريم كراميل ناعم وغني مصنوع من أجود المكونات الطبيعية ومناسب للحلويات المنزلية والمطاعم.",
   },
@@ -195,7 +195,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "كرتونة",
     sale_price: 216,
     discount_percent: 5,
-    image_url: "/manus-storage/pure-product-strawberry-jelly_530780c7.jpg",
+    image_url: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663954061026/fTElKTnUYqOAcnwm.jpg",
     category: "جيلي وسناكس",
     description: "جيلي فراولة طبيعي بدون ألوان صناعية ضارة، نكهة منعشة قوية ومحبوبة للأطفال والكبار.",
   },
@@ -207,7 +207,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "كرتونة",
     sale_price: 216,
     discount_percent: 0,
-    image_url: "/manus-storage/pure-product-mango-jelly_0cd2c579.jpg",
+    image_url: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663954061026/JswAJFsRXMahPIGp.jpg",
     category: "جيلي وسناكس",
     description: "جيلي مانجو بنكهة الفواكه الاستوائية الطبيعية، يذوب بسهولة وسريع التحضير.",
   },
@@ -219,7 +219,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "كرتونة",
     sale_price: 156,
     discount_percent: 0,
-    image_url: "/manus-storage/pure-product-crispy-mix_5fa9c9ec.jpg",
+    image_url: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663954061026/sGorlmJyZAyNqfPb.jpg",
     category: "بهارات وخلطات",
     description: "خلطة تتبيل وقرمشة الدجاج الحارة بمزيج توابل شرقية سرية تعطي قرمشة ذهبية مثالية.",
   },
@@ -231,7 +231,7 @@ const INITIAL_PRODUCTS: Product[] = [
     unit: "شيكارة",
     sale_price: 425,
     discount_percent: 0,
-    image_url: "/manus-storage/pure-product-basmati_0ce3aa7c.jpg",
+    image_url: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663954061026/vkChUIXzgYMlVSkp.jpg",
     category: "بقوليات ومكسرات",
     description: "أرز بسمتي هندي حبة طويلة أصلي معتق، خالي من الشوائب ورائحة عطرة فريدة.",
   },
@@ -649,7 +649,7 @@ function loadProductsWithCurrentImages(): Product[] {
   const currentImages = new Map(INITIAL_PRODUCTS.map((product) => [product.id, product.image_url]));
   return stored.map((product) => {
     const currentImage = currentImages.get(product.id);
-    const isLegacyImage = !product.image_url || product.image_url.includes("images.unsplash.com");
+    const isLegacyImage = !product.image_url || product.image_url.includes("images.unsplash.com") || product.image_url.includes("/manus-storage/");
     return currentImage && isLegacyImage ? { ...product, image_url: currentImage } : product;
   });
 }
